@@ -16,6 +16,10 @@ jobs:
           distribution: temurin
           java-version: 21
       - run: npm install
+      - name: Preparer le dossier web
+        run: |
+          mkdir -p www
+          cp index.html www/index.html
       - run: npx cap add android
       - name: Permission notifications
         run: |
