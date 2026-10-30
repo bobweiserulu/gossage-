@@ -1,0 +1,6 @@
+{
+  "appId": "ca.ferme.entretien",
+  "appName": "Entretien Ferme",
+  "webDir": "www",
+  "android": { "allowMixedContent": false }
+}
