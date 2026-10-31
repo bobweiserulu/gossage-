@@ -9,7 +9,7 @@
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--tx);font:16px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
 html{--nav:0px}
-#app{max-width:640px;margin:0 auto;padding:12px 12px calc(96px + var(--nav))}
+#app,.gh>div{max-width:640px;margin:0 auto;padding:12px 12px calc(96px + var(--nav))}
 h1{font-size:20px;margin:6px 4px 10px}
 .tabs,.chips{display:flex;gap:6px;overflow-x:auto;padding:2px 0 8px}
 .tab,.chip{flex:none;border:1px solid var(--bd);background:var(--card);color:var(--tx);border-radius:20px;padding:8px 14px;font:inherit;cursor:pointer}
@@ -55,6 +55,9 @@ button{font:inherit}
 .det{background:var(--bg);border:1px solid var(--bd);border-radius:10px;padding:8px 10px;margin:6px 0;font-size:14px;cursor:pointer;word-break:break-word}
 .src{color:var(--mut);font-size:13px}
 .ent{color:var(--tx);padding:6px 0;border-bottom:1px dotted var(--bd);cursor:pointer;word-break:break-word}
+
+.gh{position:fixed;inset:0;z-index:3;background:var(--bg);overflow:hidden;will-change:transform;padding-top:env(safe-area-inset-top,0px)}
+#app.pg{touch-action:pan-y}
 </style></head>
 <body><div id="app"></div>
 <script>
@@ -245,13 +248,37 @@ function menu(){
   AP.exitApp()})})();
 (function(){let x0=0,y0=0,t0=0,ok=false;
  document.addEventListener("touchstart",e=>{ok=!(document.querySelector(".mo")||e.target.closest(".chips,input,textarea,select,.bb")||document.querySelector(".drag"));const p=e.touches[0];x0=p.clientX;y0=p.clientY;t0=Date.now()},{passive:true});
- document.addEventListener("touchend",e=>{if(!ok)return;ok=false;const p=e.changedTouches[0],dx=p.clientX-x0,dy=p.clientY-y0;
+ document.addEventListener("touchend",e=>{if(!ok||ui.eq)return;ok=false;const p=e.changedTouches[0],dx=p.clientX-x0,dy=p.clientY-y0;
   if(Math.abs(dx)<70||Math.abs(dx)<Math.abs(dy)*1.6||Date.now()-t0>700||Date.now()-(window._de||0)<600)return;go(dx<0?1:-1)},{passive:true});
  function go(d){
   if(ui.eq){const e=S.eq.find(x=>x.id==ui.eq);if(!e)return;const L=S.eq.filter(x=>x.cat==e.cat),n=L[L.findIndex(x=>x.id==e.id)+d];if(n){ui.eq=n.id;render();window.scrollTo(0,0)}return}
   const cats=S.cats.map(c=>c.id),order=["home","todo","search"],t=ui.tab;
   if(cats.includes(t)){const n=cats[cats.indexOf(t)+d];if(n){ui.tab=n;ui.sub="";render();window.scrollTo(0,0)}return}
   const n=order[order.indexOf(t)+d];if(n){ui.tab=n;render();window.scrollTo(0,0)}}})();
+(function(){
+ let x0=0,y0=0,t0=0,on=false,lock=0,dx=0,gh={},app=null,W=0,busy=false;
+ const nb=d=>{const e=S.eq.find(x=>x.id==ui.eq);if(!e)return null;const L=S.eq.filter(x=>x.cat==e.cat);return L[L.findIndex(x=>x.id==e.id)+d]||null};
+ const mk=d=>{const n=nb(d);if(!n)return null;const keep=ui.eq;let h;ui.eq=n.id;try{h=detail()}finally{ui.eq=keep}
+  const g=document.createElement("div");g.className="gh";g.innerHTML="<div>"+h+"</div>";document.body.appendChild(g);return g};
+ const put=(el,x,tr)=>{el.style.transition=tr||"none";el.style.transform="translate3d("+x+"px,0,0)"};
+ const clean=()=>{Object.keys(gh).forEach(k=>gh[k]&&gh[k].remove());gh={};app.style.transition="";app.style.transform=""};
+ document.addEventListener("touchstart",e=>{
+  on=!!ui.eq&&!busy&&e.touches.length==1&&!(document.querySelector(".mo")||document.querySelector(".drag")||e.target.closest(".chips,input,textarea,select,.bb"));
+  lock=0;dx=0;if(!on)return;const p=e.touches[0];x0=p.clientX;y0=p.clientY;t0=Date.now();W=window.innerWidth;app=document.getElementById("app")},{passive:true});
+ document.addEventListener("touchmove",e=>{
+  if(!on)return;const p=e.touches[0],ax=p.clientX-x0,ay=p.clientY-y0;
+  if(!lock){if(Math.abs(ax)<8&&Math.abs(ay)<8)return;lock=Math.abs(ax)>Math.abs(ay)*1.2?1:-1}
+  if(lock!==1)return;
+  dx=ax;const d=dx<0?1:-1;if(!(d in gh))gh[d]=mk(d);
+  if(gh[d]){put(app,dx);Object.keys(gh).forEach(k=>gh[k]&&put(gh[k],dx+(k==1?W:-W)))}else put(app,dx*0.3)},{passive:true});
+ function end(){
+  if(!on)return;on=false;if(lock!==1){lock=0;return}lock=0;
+  const d=dx<0?1:-1,g=gh[d],n=nb(d),v=Math.abs(dx)/Math.max(1,Date.now()-t0),T="transform .2s ease-out";
+  const commit=!!(g&&n&&(Math.abs(dx)>W*0.3||(v>0.5&&Math.abs(dx)>40)));
+  busy=true;
+  if(commit){put(app,-d*W,T);put(g,0,T)}else{put(app,0,T);Object.keys(gh).forEach(k=>gh[k]&&put(gh[k],k==1?W:-W,T))}
+  setTimeout(()=>{if(commit){ui.eq=n.id;render();window.scrollTo(0,0)}clean();busy=false;dx=0},220)}
+ document.addEventListener("touchend",end);document.addEventListener("touchcancel",end)})();
 const TA='display:block;width:100%;margin-top:3px;padding:10px;font:inherit;border:1px solid var(--bd);border-radius:10px;background:var(--bg);color:var(--tx)';
 function aiPrompt(q,web,nosys){return `${nosys?"":SYS+" "}Tu es un technicien agricole. Machine : ${q}. ${web?"Utilise la recherche web pour trouver le manuel de l’opérateur ou le tableau d’entretien du fabricant. ":""}Propose jusqu’à 8 entretiens préventifs avec leur intervalle. Réponds UNIQUEMENT par un tableau JSON, sans texte autour ni balises. Chaque élément : {"name":"entretien en français","everyDays":nombre ou 0,"everyHours":nombre ou 0,"confidence":"haute|moyenne|faible","source":"${web?"titre du document ET URL précise de la page où l’information a été trouvée":"manuel du fabricant | pratique courante | estimation"}","details":"spécifications utiles trouvées : type et viscosité d’huile, quantité, référence ou numéro de filtre, type de graisse, couple de serrage… (laisse vide si non trouvé, n’invente rien)","variant":"exacte si les données concernent exactement cette variante, sinon proche","variantNote":"si proche : le modèle réellement utilisé"}. Si tu n’es pas sûr d’un intervalle, mets confidence "faible" au lieu d’inventer.`}
 function aiParse(t){return JSON.parse(t.slice(t.indexOf("["),t.lastIndexOf("]")+1))}
@@ -363,7 +390,7 @@ function detail(){const e=S.eq.find(x=>x.id==ui.eq);if(!e){ui.eq=null;return ""}
  <button class="p big" data-a="addTask" data-i="${e.id}">＋ Ajouter un entretien</button>
  <button class="g big" data-a="ai" data-i="${e.id}">✨ Suggérer des entretiens (IA)</button>
  <div class="row" style="justify-content:space-between;margin-top:14px"><h3 style="margin:0">Registre</h3><button class="g" data-a="addNote" data-i="${e.id}">＋ Note</button></div>${reg(e)}`}
-function render(){const a=document.getElementById("app");
+function render(){const a=document.getElementById("app");a.classList.toggle("pg",!!ui.eq);
  if(ui.eq){a.innerHTML=detail();return}
  const t=ui.tab;
  a.innerHTML=(t=="todo"?todoView():t=="search"?searchView():t=="home"?homeView():catView())+botBar()}
