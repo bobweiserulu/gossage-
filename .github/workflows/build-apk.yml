@@ -25,6 +25,7 @@ jobs:
           cp index.html www/index.html
       - run: npx cap add android
       - name: Icone
+        continue-on-error: true
         run: |
           python -m pip install pillow
           python make_icons.py
@@ -33,15 +34,26 @@ jobs:
           M=android/app/src/main/AndroidManifest.xml
           sed -i 's#</manifest>#    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>\n</manifest>#' $M
       - run: npx cap sync android
+      - name: Numero de version (monte a chaque compilation)
+        run: |
+          G=android/app/build.gradle
+          sed -i "s/versionCode [0-9]\+/versionCode ${{ github.run_number }}/" $G
+          sed -i "s/versionName \"[^\"]*\"/versionName \"1.${{ github.run_number }}\"/" $G
+          grep -n "versionCode\|versionName" $G
       - name: Signature fixe
         run: |
           mkdir -p ~/.android
           cp debug.keystore ~/.android/debug.keystore
+          keytool -list -v -keystore ~/.android/debug.keystore -storepass android | grep -i "SHA256\|Alias"
       - name: Compiler
         working-directory: android
         run: |
           chmod +x gradlew
           ./gradlew assembleDebug
+      - name: Empreinte de signature de l APK
+        continue-on-error: true
+        run: |
+          keytool -printcert -jarfile android/app/build/outputs/apk/debug/app-debug.apk | grep -i "SHA256\|Owner"
       - uses: actions/upload-artifact@v4
         with:
           name: entretien-ferme-apk
