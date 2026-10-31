@@ -187,7 +187,8 @@ function settings(){
  <label>Modèle Gemini<input id="gm" value="${esc(c.gm||"gemini-flash-latest")}"></label>
  <button class="p big" data-save>Enregistrer</button>
  <h3 style="margin-top:18px">Notifications</h3><button class="g big" data-test>Notification test (dans 5 s)</button>
- <h3 style="margin-top:18px">Sauvegarde</h3><button class="g big" data-bk>Copier une sauvegarde</button>
+ <h3 style="margin-top:18px">Sauvegarde</h3><button class="g big" data-bk>Copier la sauvegarde complète</button>
+ <button class="g big" data-bk2>Copier sans les photos (plus léger)</button>
  <label>Restaurer (colle la sauvegarde ici)<textarea id="rs" rows="3" style="${TA}"></textarea></label><button class="g big" data-rs>Restaurer</button>
  <div id="cm" class="mut" style="margin:8px 0"></div><div class="bt"><button class="g" data-x>Fermer</button></div></div>`;
  document.body.appendChild(m);const msg=t=>{m.querySelector("#cm").textContent=t};
@@ -197,8 +198,18 @@ function settings(){
   if(b.dataset.test!==undefined){const ln=LN();if(!ln){msg("Notifications disponibles seulement dans l’app Android.");return}
    try{const p=await ln.requestPermissions();if(p.display!=="granted"){msg("Permission refusée : active les notifications dans les réglages Android.");return}
     await ln.schedule({notifications:[{id:999,title:"Entretien Ferme",body:"Les notifications fonctionnent ✅",schedule:{at:new Date(Date.now()+5000)}}]});msg("Notification dans 5 secondes…")}catch(e){msg("Erreur : "+e.message)}return}
-  if(b.dataset.bk!==undefined){try{await navigator.clipboard.writeText(JSON.stringify(S));msg("Sauvegarde copiée. Colle-la dans une note ou un courriel à toi-même.")}catch(e){msg("Copie impossible sur cet appareil.")}return}
-  if(b.dataset.rs!==undefined){try{const o=JSON.parse(m.querySelector("#rs").value);if(!o.cats||!o.eq)throw 0;S=o;save();m.remove();render()}catch(e){msg("Sauvegarde invalide.")}}};
+  if(b.dataset.bk!==undefined||b.dataset.bk2!==undefined){const light=b.dataset.bk2!==undefined;
+   try{const o=light?{...S,eq:S.eq.map(e=>({...e,photo:""}))}:S;const t=JSON.stringify(o);await navigator.clipboard.writeText(t);msg("Sauvegarde copiée ("+Math.round(t.length/1024)+" Ko). Colle-la dans une note ou un courriel à toi-même.")}catch(e){msg("Copie impossible sur cet appareil.")}return}
+  if(b.dataset.rs!==undefined){const r=restoreFrom(m.querySelector("#rs").value);if(r){msg(r);return}m.remove();render()}};
+}
+function restoreFrom(txt){
+ txt=(txt||"").trim();
+ if(!txt)return "Rien n’est collé dans la case.";
+ let o;try{o=JSON.parse(txt)}catch(e){return "Texte reçu : "+Math.round(txt.length/1024)+" Ko, mais il est incomplet ou abîmé. Il a peut-être été coupé au collage. Essaie la sauvegarde « sans les photos »."}
+ if(!o||!Array.isArray(o.cats)||!Array.isArray(o.eq))return "Ce texte n’est pas une sauvegarde de l’app.";
+ const old=(S&&S.eq)||[];
+ o.eq.forEach(e=>{if(!e.photo){const x=old.find(y=>y.id===e.id);if(x&&x.photo)e.photo=x.photo}});
+ S=o;save();return ""
 }
 const SYS="Lorsqu’une recherche de plan d’entretien est effectuée, respecte rigoureusement la marque, le modèle et la variante exacte spécifiés par l’utilisateur. Ne substitue pas les données par une version variante (par exemple, si la demande est pour une Anderson Hybrid, n’utilise pas le manuel de la Hybrid X). Si la variante exacte n’est pas trouvée, mentionne-le explicitement avant de donner les informations du modèle le plus proche.";
 document.documentElement.style.setProperty("--nav",NATIVE?"56px":"0px");
@@ -290,7 +301,7 @@ async function aiSuggest(i){
 const guessIcon=n=>/tracteur/i.test(n)?"🚜":/foin|herbe|ensil/i.test(n)?"🌾":/fumier|lisier|purin/i.test(n)?"🚛":/sol|semis|culture/i.test(n)?"🌱":/[eé]table|traite|vache|lait/i.test(n)?"🐄":"🔧";
 const iconFor=c=>c.icon||guessIcon(c.name);
 const norm=s=>String(s||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase();
-function hdr(title,back){return `<div class="row" style="justify-content:space-between;margin:2px 0 10px"><div class="row" style="flex-wrap:nowrap">${back?'<button class="g" data-a="home" aria-label="Retour">←</button>':""}<h1 style="margin:0">${title}</h1></div><button class="g" data-a="menu" aria-label="Menu">☰</button></div>`}
+function hdr(title,back){return `<div class="row" style="flex-wrap:nowrap;margin:2px 0 10px"><button class="g" data-a="menu" aria-label="Menu">☰</button>${back?'<button class="g" data-a="home" aria-label="Retour">←</button>':""}<h1 style="margin:0">${title}</h1></div>`}
 function homeView(){const n=todos().length;
  return hdr("🚜 Entretien Ferme")+(n?`<div class="note" style="border-style:solid;border-color:var(--warn);color:var(--warn);cursor:pointer" data-a="tab" data-i="todo">⏰ ${n} entretien${n>1?"s":""} à faire — voir la liste</div>`:`<div class="note">Aucun entretien à faire bientôt ✅</div>`)+
  `<div class="grid">${S.cats.map(c=>{const eqs=S.eq.filter(e=>e.cat==c.id),k=eqs.filter(e=>worst(e)>0).length,w=Math.max(0,...eqs.map(worst));
