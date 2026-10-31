@@ -40,20 +40,41 @@ jobs:
           sed -i "s/versionCode [0-9]\+/versionCode ${{ github.run_number }}/" $G
           sed -i "s/versionName \"[^\"]*\"/versionName \"1.${{ github.run_number }}\"/" $G
           grep -n "versionCode\|versionName" $G
-      - name: Signature fixe
+      - name: Verifier la cle de signature du depot
         run: |
-          mkdir -p ~/.android
-          cp debug.keystore ~/.android/debug.keystore
-          keytool -list -v -keystore ~/.android/debug.keystore -storepass android | grep -i "SHA256\|Alias"
+          test -s debug.keystore || { echo "ERREUR: debug.keystore est absent ou vide a la racine du depot"; exit 1; }
+          keytool -list -v -keystore debug.keystore -storepass android | grep -i "Alias\|SHA256"
+      - name: Forcer la signature avec debug.keystore
+        run: |
+          cat > "$GITHUB_WORKSPACE/sign.gradle" <<'GRADLE'
+          allprojects { p ->
+            p.pluginManager.withPlugin('com.android.application') {
+              def sc = p.android.signingConfigs.getByName('debug')
+              sc.storeFile = new File(System.getenv('KS'))
+              sc.storePassword = 'android'
+              sc.keyAlias = 'androiddebugkey'
+              sc.keyPassword = 'android'
+            }
+          }
+          GRADLE
       - name: Compiler
         working-directory: android
+        env:
+          KS: ${{ github.workspace }}/debug.keystore
         run: |
           chmod +x gradlew
-          ./gradlew assembleDebug
-      - name: Empreinte de signature de l APK
-        continue-on-error: true
+          ./gradlew assembleDebug -I "$GITHUB_WORKSPACE/sign.gradle"
+      - name: Verifier que l APK est signe avec la cle du depot
         run: |
-          keytool -printcert -jarfile android/app/build/outputs/apk/debug/app-debug.apk | grep -i "SHA256\|Owner"
+          KS_SHA=$(keytool -list -v -keystore debug.keystore -storepass android | grep -m1 "SHA256:" | awk '{print $2}' | tr -d ':' | tr 'A-Z' 'a-z')
+          SDK="${ANDROID_HOME:-$ANDROID_SDK_ROOT}"
+          AS=$(ls -d "$SDK"/build-tools/*/apksigner 2>/dev/null | sort -V | tail -1)
+          if [ -z "$AS" ] || [ ! -x "$AS" ]; then echo "apksigner introuvable, verification sautee"; exit 0; fi
+          APK_SHA=$("$AS" verify --print-certs android/app/build/outputs/apk/debug/app-debug.apk | grep -m1 "SHA-256 digest" | awk '{print $NF}')
+          echo "Cle du depot : $KS_SHA"
+          echo "Cle de l APK : $APK_SHA"
+          if [ "$KS_SHA" != "$APK_SHA" ]; then echo "ERREUR: l APK n est PAS signe avec debug.keystore"; exit 1; fi
+          echo "OK: signature identique"
       - uses: actions/upload-artifact@v4
         with:
           name: entretien-ferme-apk
