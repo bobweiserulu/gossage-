@@ -48,6 +48,13 @@ button{font:inherit}
 .bb button{background:none;border:0;color:var(--mut);font:inherit;font-size:12px;display:flex;flex-direction:column;align-items:center;gap:2px;padding:4px 18px;cursor:pointer}
 .bb button.cur{color:var(--pri);font-weight:600}
 .bd{position:absolute;top:-6px;right:-12px;background:var(--bad);color:#fff;border-radius:9px;font-size:11px;font-style:normal;padding:0 5px;line-height:16px}
+.tk{background:var(--card);border:1px solid var(--bd);border-radius:12px;margin:6px 0;overflow:hidden}
+.tkh{display:flex;align-items:center;gap:8px;padding:8px 10px;cursor:pointer}
+.tkb{padding:0 10px 10px;border-top:1px dashed var(--bd)}
+.al{padding:4px 8px}
+.det{background:var(--bg);border:1px solid var(--bd);border-radius:10px;padding:8px 10px;margin:6px 0;font-size:14px;cursor:pointer;word-break:break-word}
+.src{color:var(--mut);font-size:13px}
+.ent{color:var(--tx);padding:6px 0;border-bottom:1px dotted var(--bd);cursor:pointer;word-break:break-word}
 </style></head>
 <body><div id="app"></div>
 <script>
@@ -59,7 +66,7 @@ function seed(){return {"cats": [{"id": "c1", "name": "Tracteurs", "subs": []}, 
 let S;try{S=JSON.parse(localStorage.getItem(KEY))}catch(e){}
 if(!S||!S.cats)S=seed();
 const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){alert("Stockage plein : retire des photos.")}clearTimeout(window._pn);window._pn=setTimeout(()=>planNotifs(),400)};
-let ui={tab:"home",sub:"",eq:null,hist:{}};
+let ui={tab:"home",sub:"",eq:null,hist:{},open:{},reg:{}};
 
 function st(e,t){let d=null,h=null,l=0;const u=e.unit||"h";
  if(+t.everyDays&&t.lastDate)d=Math.round((new Date(t.lastDate)-new Date(today()))/864e5)+ +t.everyDays;
@@ -76,7 +83,7 @@ const todos=()=>S.eq.flatMap(e=>e.tasks.map(t=>({e,t,s:st(e,t)}))).filter(x=>x.s
 
 function form(title,fields,onSave,onDel){
  const m=document.createElement("div");m.className="mo";
- m.innerHTML=`<div class="md"><h3>${esc(title)}</h3>${fields.map(f=>`<label>${esc(f.l)}${f.t=="select"?`<select name="${f.k}">${f.o.map(o=>`<option value="${esc(o[0])}"${o[0]==f.v?" selected":""}>${esc(o[1])}</option>`).join("")}</select>`:`<input name="${f.k}" type="${f.t||"text"}" ${f.t=="number"?'step="any" inputmode="decimal"':""} ${f.t=="file"?'accept="image/*"':""} value="${esc(f.v)}">`}</label>`).join("")}<div class="bt"><button class="g" data-x>Annuler</button>${onDel?'<button class="r" data-d>Supprimer</button>':""}<button class="p" data-s>Enregistrer</button></div></div>`;
+ m.innerHTML=`<div class="md"><h3>${esc(title)}</h3>${fields.map(f=>`<label>${esc(f.l)}${f.t=="textarea"?`<textarea name="${f.k}" rows="3" style="${TA}">${esc(f.v)}</textarea>`:f.t=="select"?`<select name="${f.k}">${f.o.map(o=>`<option value="${esc(o[0])}"${o[0]==f.v?" selected":""}>${esc(o[1])}</option>`).join("")}</select>`:`<input name="${f.k}" type="${f.t||"text"}" ${f.t=="number"?'step="any" inputmode="decimal"':""} ${f.t=="file"?'accept="image/*"':""} value="${esc(f.v)}">`}</label>`).join("")}<div class="bt"><button class="g" data-x>Annuler</button>${onDel?'<button class="r" data-d>Supprimer</button>':""}<button class="p" data-s>Enregistrer</button></div></div>`;
  m.onclick=async ev=>{const b=ev.target;
   if(b==m||b.dataset.x!==undefined){m.remove();return}
   if(b.dataset.d!==undefined){if(b.dataset.c){onDel();m.remove();save();render()}else{b.dataset.c=1;b.textContent="Confirmer?"}return}
@@ -95,6 +102,20 @@ const A={
  sub:i=>{ui.sub=i;render()},
  back:()=>{ui.eq=null;render()},
  home:()=>{ui.tab="home";ui.sub="";render()},
+ tx:(_,j)=>{ui.open[j]=!ui.open[j];render()},
+ alert:(i,j)=>{const t=S.eq.find(x=>x.id==i).tasks.find(x=>x.id==j);t.alert=!on(t);save();render()},
+ det:(i,j)=>{const e=S.eq.find(x=>x.id==i),t=e.tasks.find(x=>x.id==j);form("Détails : "+t.name,[{k:"d",l:"Détails (type d’huile, n° de filtre, quantité…)",t:"textarea",v:t.details},{k:"s",l:"Source de l’information",t:"textarea",v:t.note}],v=>{t.details=v.d.trim();t.note=v.s.trim()})},
+ reg:i=>{ui.reg[i]=!ui.reg[i];render()},
+ addNote:(i,j)=>{const e=i?S.eq.find(x=>x.id==i):null;if(!e&&!S.eq.length)return;
+  const f=e?[{k:"t",l:"Concerne",t:"select",v:j||"",o:[["","Note générale"],...e.tasks.map(t=>[t.id,t.name])]}]:[{k:"m",l:"Machine",t:"select",v:S.eq[0].id,o:S.eq.map(x=>[x.id,x.name])}];
+  f.push({k:"d",l:"Date",t:"date",v:today()},{k:"x",l:"Note",t:"textarea"});
+  form("Nouvelle note",f,v=>{if(!v.x.trim())return false;const m=e||S.eq.find(x=>x.id==v.m),t=e?m.tasks.find(x=>x.id==v.t):null;
+   (m.notes=m.notes||[]).unshift({id:uid(),ts:new Date().toISOString(),date:v.d||today(),text:v.x.trim(),by:me(),taskId:t?t.id:"",taskName:t?t.name:""})})},
+ ent:(i,j)=>{const e=S.eq.find(x=>x.id==i),p=j.split(":");
+  if(p[0]=="n"){const n=(e.notes||[]).find(x=>x.id==p[1]);if(!n)return;
+   form("Modifier la note",[{k:"d",l:"Date",t:"date",v:n.date},{k:"x",l:"Note",t:"textarea",v:n.text}],v=>{if(!v.x.trim())return false;n.date=v.d||n.date;n.text=v.x.trim()},()=>{e.notes=e.notes.filter(x=>x!==n)})}
+  else{const t=e.tasks.find(x=>x.id==p[1]),k=+p[2],h=t&&(t.hist||[])[k];if(!h)return;
+   form("Modifier : "+t.name,[{k:"d",l:"Date",t:"date",v:h.date},{k:"h",l:"Heures au compteur",t:"number",v:h.hours},{k:"n",l:"Détails",t:"textarea",v:h.note}],v=>{h.date=v.d||h.date;h.hours=+v.h||0;h.note=v.n.trim();lastFrom(t)},()=>{t.hist.splice(k,1);lastFrom(t)})}},
  open:i=>{ui.eq=i;render()},
  addCat:()=>form("Nouvel onglet",[{k:"n",l:"Nom"},{k:"i",l:"Icône (un emoji)",v:"🔧"}],v=>{if(!v.n.trim())return false;const c={id:uid(),name:v.n.trim(),icon:v.i.trim()||"🔧",subs:[]};S.cats.push(c);ui.tab=c.id}),
  editCat:()=>{const c=cat();form("Modifier l’onglet",[{k:"n",l:"Nom",v:c.name},{k:"i",l:"Icône (un emoji)",v:iconFor(c)}],v=>{c.name=v.n.trim()||c.name;c.icon=v.i.trim()||iconFor(c)},()=>{S.eq=S.eq.filter(e=>e.cat!=c.id);S.cats=S.cats.filter(x=>x!=c);ui.tab="home"})},
@@ -113,13 +134,13 @@ const A={
    {k:"ld",l:"Dernière fois (date)",t:"date",v:t?.lastDate??today()},
    {k:"lh",l:"Dernière fois (heures)",t:"number",v:t?.lastHours??e.hours},
    {k:"rd",l:"Me rappeler … jours avant",t:"number",v:t?.remindDays??7},
-   {k:"rh",l:"Me rappeler … heures avant",t:"number",v:t?.remindHours??10},{k:"nt",l:"Note / source",v:t?.note}],
-   v=>{if(!v.n.trim())return false;const o={name:v.n.trim(),everyDays:+v.d||0,everyHours:+v.h||0,lastDate:v.ld,lastHours:v.lh===""?null:+v.lh,remindDays:+v.rd||0,remindHours:+v.rh||0,note:v.nt};
+   {k:"rh",l:"Me rappeler … heures avant",t:"number",v:t?.remindHours??10},{k:"dt",l:"Détails (type d’huile, n° de filtre, quantité…)",t:"textarea",v:t?.details},{k:"nt",l:"Source de l’information",t:"textarea",v:t?.note}],
+   v=>{if(!v.n.trim())return false;const o={name:v.n.trim(),everyDays:+v.d||0,everyHours:+v.h||0,lastDate:v.ld,lastHours:v.lh===""?null:+v.lh,remindDays:+v.rd||0,remindHours:+v.rh||0,note:v.nt,details:v.dt};
     if(t)Object.assign(t,o);else e.tasks.push({id:uid(),hist:[],...o})},
    t?()=>{e.tasks=e.tasks.filter(x=>x!=t)}:null)},
  done:(i,j)=>{const e=S.eq.find(x=>x.id==i),t=e.tasks.find(x=>x.id==j);
-  form("Entretien fait : "+t.name,[{k:"d",l:"Date",t:"date",v:today()},{k:"h",l:"Heures au compteur",t:"number",v:e.hours},{k:"n",l:"Note (facultatif)"}],v=>{
-   t.hist=t.hist||[];t.hist.unshift({date:v.d,hours:+v.h||0,note:v.n});t.lastDate=v.d;t.lastHours=+v.h||0;if(+v.h>e.hours)e.hours=+v.h})},
+  form("Entretien fait : "+t.name,[{k:"d",l:"Date",t:"date",v:today()},{k:"h",l:"Heures au compteur",t:"number",v:e.hours},{k:"n",l:"Détails de cette fois (huile utilisée, filtre…) — facultatif"}],v=>{
+   t.hist=t.hist||[];t.hist.unshift({id:uid(),ts:new Date().toISOString(),by:me(),date:v.d,hours:+v.h||0,note:v.n});t.lastDate=v.d;t.lastHours=+v.h||0;if(+v.h>e.hours)e.hours=+v.h})},
  hist:(i,j)=>{ui.hist[j]=!ui.hist[j];render()},
  ai:i=>aiSuggest(i),
  cfg:()=>settings(),
@@ -147,13 +168,13 @@ async function planNotifs(){
   const pend=await ln.getPending();if(pend.notifications.length)await ln.cancel({notifications:pend.notifications});
   const out=[],now=new Date();let id=1;
   for(const e of S.eq)for(const t of e.tasks){
-   if(+t.everyDays&&t.lastDate){
+   if(t.alert!==false&&+t.everyDays&&t.lastDate){
     const due=new Date(t.lastDate+"T00:00:00");due.setDate(due.getDate()+ +t.everyDays);due.setHours(8,0,0,0);
     const rem=new Date(due);rem.setDate(rem.getDate()-(+t.remindDays||0));
     if(+t.remindDays&&rem>now)out.push({id:id++,title:"Entretien bientôt",body:t.name+" — "+e.name+" (dans "+t.remindDays+" j)",schedule:{at:rem,allowWhileIdle:true}});
     if(due>now)out.push({id:id++,title:"Entretien à faire",body:t.name+" — "+e.name,schedule:{at:due,allowWhileIdle:true}});
    }}
-  const L=todos();
+  const L=todos().filter(x=>x.t.alert!==false);
   if(L.length)for(let k=0;k<3;k++){const d=new Date(now);d.setDate(d.getDate()+k);d.setHours(8,0,0,0);if(d<=now)continue;
    out.push({id:id++,title:L.length+" entretien"+(L.length>1?"s":"")+" à faire",body:L.slice(0,4).map(x=>x.t.name+" ("+x.e.name+")").join(", "),schedule:{at:d,allowWhileIdle:true}})}
   if(out.length)await ln.schedule({notifications:out});
@@ -161,6 +182,7 @@ async function planNotifs(){
 function settings(){
  const c=cfg(),m=document.createElement("div");m.className="mo";
  m.innerHTML=`<div class="md"><h3>⚙ Réglages</h3>
+ <label>Ton nom (écrit avec tes notes)<input id="nm" value="${esc(c.name||"")}"></label>
  <label>Clé API Gemini (reste sur ce téléphone)<input id="gk" type="password" value="${esc(c.gk||"")}"></label>
  <label>Modèle Gemini<input id="gm" value="${esc(c.gm||"gemini-flash-latest")}"></label>
  <button class="p big" data-save>Enregistrer</button>
@@ -171,7 +193,7 @@ function settings(){
  document.body.appendChild(m);const msg=t=>{m.querySelector("#cm").textContent=t};
  m.onclick=async ev=>{const b=ev.target;
   if(b==m||b.dataset.x!==undefined){m.remove();return}
-  if(b.dataset.save!==undefined){localStorage.setItem(CK,JSON.stringify({gk:m.querySelector("#gk").value.trim(),gm:m.querySelector("#gm").value.trim()}));msg("Enregistré ✓");return}
+  if(b.dataset.save!==undefined){localStorage.setItem(CK,JSON.stringify({...cfg(),gk:m.querySelector("#gk").value.trim(),gm:m.querySelector("#gm").value.trim(),name:m.querySelector("#nm").value.trim(),asked:true}));msg("Enregistré ✓");return}
   if(b.dataset.test!==undefined){const ln=LN();if(!ln){msg("Notifications disponibles seulement dans l’app Android.");return}
    try{const p=await ln.requestPermissions();if(p.display!=="granted"){msg("Permission refusée : active les notifications dans les réglages Android.");return}
     await ln.schedule({notifications:[{id:999,title:"Entretien Ferme",body:"Les notifications fonctionnent ✅",schedule:{at:new Date(Date.now()+5000)}}]});msg("Notification dans 5 secondes…")}catch(e){msg("Erreur : "+e.message)}return}
@@ -184,8 +206,8 @@ function menu(){
  const c=cat(),m=document.createElement("div");m.className="mo dw";
  const it=[["addCat","＋ Nouvel onglet"]];
  if(c){it.push(["editCat","✎ Modifier l’onglet « "+c.name+" »"],["addSub","＋ Nouveau sous-onglet"]);if(ui.sub)it.push(["editSub","✎ Modifier le sous-onglet"])}
- it.push(["cfg","⚙ Réglages IA, notifications, sauvegarde"]);
- m.innerHTML=`<div class="dp"><h3 style="margin:4px 12px 10px">🚜 Entretien Ferme</h3>${it.map(x=>`<button class="mi" data-go="${x[0]}">${esc(x[1])}</button>`).join("")}<div class="sep"></div><div class="mut" style="padding:6px 12px">Astuce : garde le doigt sur une tuile, puis glisse-la pour la déplacer.</div></div>`;
+ it.push(["cfg","⚙ Réglages (nom, IA, notifications, sauvegarde)"]);
+ m.innerHTML=`<div class="dp"><h3 style="margin:4px 12px 4px">🚜 Entretien Ferme</h3><div class="mut" style="padding:0 12px 8px">👤 ${esc(me()||"Nom non défini (⚙ Réglages)")}</div>${it.map(x=>`<button class="mi" data-go="${x[0]}">${esc(x[1])}</button>`).join("")}<div class="sep"></div><div class="mut" style="padding:6px 12px">Astuce : garde le doigt sur une tuile, puis glisse-la pour la déplacer.</div></div>`;
  m.onclick=ev=>{const b=ev.target.closest("[data-go]");if(b){m.remove();A[b.dataset.go]()}else if(ev.target==m)m.remove()};
  document.body.appendChild(m)}
 (function(){let tm=null,drag=null,sx=0,sy=0;
@@ -210,8 +232,17 @@ function menu(){
   if(ui.eq){ui.eq=null;render();return}
   if(ui.tab!=="home"){ui.tab="home";ui.sub="";render();return}
   AP.exitApp()})})();
+(function(){let x0=0,y0=0,t0=0,ok=false;
+ document.addEventListener("touchstart",e=>{ok=!(document.querySelector(".mo")||e.target.closest(".chips,input,textarea,select,.bb")||document.querySelector(".drag"));const p=e.touches[0];x0=p.clientX;y0=p.clientY;t0=Date.now()},{passive:true});
+ document.addEventListener("touchend",e=>{if(!ok)return;ok=false;const p=e.changedTouches[0],dx=p.clientX-x0,dy=p.clientY-y0;
+  if(Math.abs(dx)<70||Math.abs(dx)<Math.abs(dy)*1.6||Date.now()-t0>700||Date.now()-(window._de||0)<600)return;go(dx<0?1:-1)},{passive:true});
+ function go(d){
+  if(ui.eq){const e=S.eq.find(x=>x.id==ui.eq);if(!e)return;const L=S.eq.filter(x=>x.cat==e.cat),n=L[L.findIndex(x=>x.id==e.id)+d];if(n){ui.eq=n.id;render();window.scrollTo(0,0)}return}
+  const cats=S.cats.map(c=>c.id),order=["home","todo","search"],t=ui.tab;
+  if(cats.includes(t)){const n=cats[cats.indexOf(t)+d];if(n){ui.tab=n;ui.sub="";render();window.scrollTo(0,0)}return}
+  const n=order[order.indexOf(t)+d];if(n){ui.tab=n;render();window.scrollTo(0,0)}}})();
 const TA='display:block;width:100%;margin-top:3px;padding:10px;font:inherit;border:1px solid var(--bd);border-radius:10px;background:var(--bg);color:var(--tx)';
-function aiPrompt(q,web,nosys){return `${nosys?"":SYS+" "}Tu es un technicien agricole. Machine : ${q}. ${web?"Utilise la recherche web pour trouver le manuel de l’opérateur ou le tableau d’entretien du fabricant. ":""}Propose jusqu’à 8 entretiens préventifs avec leur intervalle. Réponds UNIQUEMENT par un tableau JSON, sans texte autour ni balises. Chaque élément : {"name":"entretien en français","everyDays":nombre ou 0,"everyHours":nombre ou 0,"confidence":"haute|moyenne|faible","source":"${web?"nom du document ou URL":"manuel du fabricant | pratique courante | estimation"}","note":"précision courte","variant":"exacte si les données concernent exactement cette variante, sinon proche","variantNote":"si proche : le modèle réellement utilisé"}. Si tu n’es pas sûr d’un intervalle, mets confidence "faible" au lieu d’inventer.`}
+function aiPrompt(q,web,nosys){return `${nosys?"":SYS+" "}Tu es un technicien agricole. Machine : ${q}. ${web?"Utilise la recherche web pour trouver le manuel de l’opérateur ou le tableau d’entretien du fabricant. ":""}Propose jusqu’à 8 entretiens préventifs avec leur intervalle. Réponds UNIQUEMENT par un tableau JSON, sans texte autour ni balises. Chaque élément : {"name":"entretien en français","everyDays":nombre ou 0,"everyHours":nombre ou 0,"confidence":"haute|moyenne|faible","source":"${web?"titre du document ET URL précise de la page où l’information a été trouvée":"manuel du fabricant | pratique courante | estimation"}","details":"spécifications utiles trouvées : type et viscosité d’huile, quantité, référence ou numéro de filtre, type de graisse, couple de serrage… (laisse vide si non trouvé, n’invente rien)","variant":"exacte si les données concernent exactement cette variante, sinon proche","variantNote":"si proche : le modèle réellement utilisé"}. Si tu n’es pas sûr d’un intervalle, mets confidence "faible" au lieu d’inventer.`}
 function aiParse(t){return JSON.parse(t.slice(t.indexOf("["),t.lastIndexOf("]")+1))}
 async function aiSuggest(i){
  const e=S.eq.find(x=>x.id==i);let list=[],prov="",srcs=[];
@@ -228,14 +259,14 @@ async function aiSuggest(i){
  <div class="bt"><button class="g" data-x>Fermer</button><button class="p" data-add style="display:none">Ajouter la sélection</button></div></div>`;
  document.body.appendChild(m);
  const msg=t=>{m.querySelector("#ar").textContent=t};
- function show(){m.querySelector("#ares").innerHTML=list.map((x,k)=>`<label style="display:flex;gap:8px;align-items:flex-start;color:var(--tx);margin:6px 0"><input type="checkbox" data-k="${k}" checked style="width:auto;margin-top:5px"><span><b>${esc(x.name)}</b><br><span class="mut">${+x.everyHours?"aux "+x.everyHours+" h":""}${+x.everyHours&&+x.everyDays?" / ":""}${+x.everyDays?"aux "+x.everyDays+" j":""} · confiance ${esc(x.confidence)} · ${esc(x.source)}${x.variant=="proche"?" · ⚠ modèle proche":""}</span></span></label>`).join("");
+ function show(){m.querySelector("#ares").innerHTML=list.map((x,k)=>`<label style="display:flex;gap:8px;align-items:flex-start;color:var(--tx);margin:6px 0"><input type="checkbox" data-k="${k}" checked style="width:auto;margin-top:5px"><span><b>${esc(x.name)}</b><br><span class="mut">${+x.everyHours?"aux "+x.everyHours+" h":""}${+x.everyHours&&+x.everyDays?" / ":""}${+x.everyDays?"aux "+x.everyDays+" j":""} · confiance ${esc(x.confidence)} · ${esc(x.source)}${x.variant=="proche"?" · ⚠ modèle proche":""}</span>${x.details?`<br><span class="hist">${esc(x.details)}</span>`:""}</span></label>`).join("");
   m.querySelector("[data-add]").style.display=list.length?"":"none";const near=[...new Set(list.filter(x=>x.variant=="proche").map(x=>x.variantNote).filter(Boolean))];msg(!list.length?"Aucune suggestion.":(list.some(x=>x.variant=="proche")?"⚠ Variante exacte non trouvée : données du modèle le plus proche"+(near.length?" ("+near.join("; ")+")":"")+". Vérifie avant d’ajouter.":"Décoche ce que tu ne veux pas, puis ajoute."))}
  m.onclick=async ev=>{const b=ev.target,q=m.querySelector("#aq").value;
   if(b==m||b.dataset.x!==undefined){m.remove();return}
   if(b.dataset.add!==undefined){
    m.querySelectorAll("[data-k]").forEach(c=>{if(!c.checked)return;const x=list[c.dataset.k];
-    e.tasks.push({id:uid(),name:x.name,everyDays:+x.everyDays||0,everyHours:+x.everyHours||0,lastDate:today(),lastHours:e.hours,remindDays:7,remindHours:10,hist:[],
-     note:"IA "+prov+" ("+(x.confidence||"?")+") : "+(x.source||"")+(x.note?" "+x.note:"")+(x.variant=="proche"?" ⚠ Modèle proche : "+(x.variantNote||"?")+".":"")+(srcs.length?" Sources : "+srcs.join(" "):"")+" À valider."})});
+    e.tasks.push({id:uid(),name:x.name,everyDays:+x.everyDays||0,everyHours:+x.everyHours||0,lastDate:today(),lastHours:e.hours,remindDays:7,remindHours:10,hist:[],details:x.details||x.note||"",
+     note:"IA "+prov+" ("+(x.confidence||"?")+") : "+(x.source||"")+(x.variant=="proche"?" ⚠ Modèle proche : "+(x.variantNote||"?")+".":"")+(srcs.length?" Sources : "+srcs.join(" "):"")+" À valider."})});
    save();m.remove();render();return}
   if(b.dataset.copy!==undefined){const t=aiPrompt(q,true),ta=m.querySelector("#apr");ta.value=t;ta.style.display="block";ta.select();
    try{await navigator.clipboard.writeText(t);msg("Question copiée. Colle-la dans Gemini (avec la recherche activée), puis reviens coller la réponse.")}
@@ -263,7 +294,7 @@ function hdr(title,back){return `<div class="row" style="justify-content:space-b
 function homeView(){const n=todos().length;
  return hdr("🚜 Entretien Ferme")+(n?`<div class="note" style="border-style:solid;border-color:var(--warn);color:var(--warn);cursor:pointer" data-a="tab" data-i="todo">⏰ ${n} entretien${n>1?"s":""} à faire — voir la liste</div>`:`<div class="note">Aucun entretien à faire bientôt ✅</div>`)+
  `<div class="grid">${S.cats.map(c=>{const eqs=S.eq.filter(e=>e.cat==c.id),k=eqs.filter(e=>worst(e)>0).length,w=Math.max(0,...eqs.map(worst));
-  return `<div class="tile ${w==2?"l2b":w==1?"l1b":""}" data-a="tab" data-cat="${c.id}" data-i="${c.id}"><div class="ti">${esc(iconFor(c))}</div><b>${esc(c.name)}</b><div class="mut">${eqs.length} machine${eqs.length>1?"s":""}${k?` · <span class="l${w}">${k} à faire</span>`:""}</div></div>`}).join("")}<div class="tile add" data-a="addCat" aria-label="Nouvel onglet">＋</div></div>`}
+  return `<div class="tile ${w==2?"l2b":w==1?"l1b":""}" data-a="tab" data-cat="${c.id}" data-i="${c.id}"><div class="ti">${esc(iconFor(c))}</div><b>${esc(c.name)}</b><div class="mut">${eqs.length} machine${eqs.length>1?"s":""}${k?` · <span class="l${w}">${k} à faire</span>`:""}</div></div>`}).join("")}<div class="tile add" data-a="addCat" aria-label="Nouvel onglet">＋</div></div>`+feedHtml()}
 function eqCard(e,showCat){const w=worst(e),n=e.tasks.filter(t=>st(e,t).l>0).length,c=S.cats.find(x=>x.id==e.cat);
  return `<div class="card" data-a="open" data-i="${e.id}">${e.photo?`<img class="th" src="${e.photo}" alt="">`:`<div class="th">${c?esc(iconFor(c)):"🔧"}</div>`}<div class="grow"><b>${esc(e.name)}</b><div class="mut">${showCat&&c?esc(c.name)+" · ":""}${e.hours} ${e.unit||"h"} · ${e.tasks.length} entretien${e.tasks.length>1?"s":""}</div></div>${e.tasks.length?badge(w,n?n+" à faire":"OK"):""}</div>`}
 function searchRes(q){q=norm(q.trim());if(!q)return `<p class="mut">Tape le nom d’une machine, d’un entretien ou d’un onglet.</p>`;
@@ -276,28 +307,54 @@ function botBar(){const n=todos().length,t=ui.tab,home=t=="home"||S.cats.some(c=
  return `<div class="bb">${b("home",home,"🏠","Accueil")}${b("todo",t=="todo","⏰","À faire",n?`<i class="bd">${n}</i>`:"")}${b("search",t=="search","🔍","Chercher")}</div>`}
 function todoView(){const L=todos();
  return hdr("⏰ À faire")+`<div class="note">Les rappels arrivent aussi en notification à 8 h.</div>`+
- (L.length?L.map(x=>`<div class="card" data-a="open" data-i="${x.e.id}"><div class="grow"><b>${esc(x.t.name)}</b><div class="mut">${esc(x.e.name)}</div></div>${badge(x.s.l,x.s.txt)}</div>`).join(""):`<p class="mut">Rien à faire bientôt ✅</p>`)}
+ (L.length?L.map(x=>`<div class="card" data-a="open" data-i="${x.e.id}"><div class="grow"><b>${esc(x.t.name)}</b><div class="mut">${esc(x.e.name)}</div></div>${badge(x.s.l,x.s.txt)}<button class="g al" data-a="alert" data-i="${x.e.id}" data-j="${x.t.id}" aria-label="Alerte">${on(x.t)?"🔔":"🔕"}</button></div>`).join(""):`<p class="mut">Rien à faire bientôt ✅</p>`)}
 function catView(){const c=cat();if(!c){ui.tab="home";return homeView()}
  const list=S.eq.filter(e=>e.cat==c.id&&(!ui.sub||e.sub==ui.sub));
  return hdr(esc(iconFor(c))+" "+esc(c.name),true)+
  (c.subs.length?`<div class="chips"><button class="chip ${!ui.sub?"on":""}" data-a="sub" data-i="">Tout</button>${c.subs.map(x=>`<button class="chip ${ui.sub==x.id?"on":""}" data-a="sub" data-i="${x.id}">${esc(x.name)}</button>`).join("")}</div>`:"")+
  (list.map(e=>eqCard(e)).join("")||`<p class="mut">Aucun équipement ici.</p>`)+
  `<button class="p big" data-a="addEq">＋ Ajouter un équipement</button>`}
+const on=t=>t.alert!==false;
+function taskRow(e,t){const s=st(e,t),hs=(t.hist||[]).slice(0,3),o=ui.open[t.id],u=e.unit||"h";
+ const iv=[+t.everyDays?"aux "+t.everyDays+" j":"",+t.everyHours?"aux "+t.everyHours+" "+u:""].filter(Boolean).join(" / ")||"sans intervalle";
+ return `<div class="tk"><div class="tkh" data-a="tx" data-j="${t.id}"><div class="grow"><b>${esc(t.name)}</b></div>${badge(s.l,s.txt)}<button class="g al" data-a="alert" data-i="${e.id}" data-j="${t.id}" aria-label="Alerte">${on(t)?"🔔":"🔕"}</button><span class="mut">${o?"▾":"▸"}</span></div>${o?`<div class="tkb"><div class="mut" style="margin-top:6px">${iv} · fait le ${esc(t.lastDate||"?")}${t.lastHours!=null?" à "+t.lastHours+" "+u:""}</div>
+ <div class="det" data-a="det" data-i="${e.id}" data-j="${t.id}">📝 ${t.details?esc(t.details).replace(/\n/g,"<br>"):`<span class="mut">Ajouter des détails (type d’huile, n° de filtre…)</span>`}</div>
+ ${t.note?`<div class="det src" data-a="det" data-i="${e.id}" data-j="${t.id}">ℹ ${esc(t.note)}</div>`:""}
+ ${hs.map(h=>`<div class="hist" style="color:var(--tx)">✓ ${esc(h.date)}${h.hours!=null?" · "+h.hours+" "+u:""}${h.note?" · "+esc(h.note):""}${h.by?" — "+esc(h.by):""}</div>`).join("")}
+ <div class="row" style="margin-top:8px"><button class="p" data-a="done" data-i="${e.id}" data-j="${t.id}">✓ Fait</button><button class="g" data-a="addNote" data-i="${e.id}" data-j="${t.id}">📝 Note</button><button class="g" data-a="editTask" data-i="${e.id}" data-j="${t.id}">✎ Modifier</button></div></div>`:""}</div>`}
+function me(){return (cfg().name||"").trim()}
+const ord=(a,b)=>(b.date+(b.ts||"")).localeCompare(a.date+(a.ts||""));
+const lastFrom=t=>{const m=[...(t.hist||[])].sort(ord)[0];if(m){t.lastDate=m.date;t.lastHours=m.hours}};
+function entries(e){const a=[];
+ e.tasks.forEach(t=>(t.hist||[]).forEach((h,i)=>a.push({k:"f",e,t,h,i,date:h.date||"",ts:h.ts||"",txt:h.note||"",hours:h.hours,by:h.by||"",name:t.name})));
+ (e.notes||[]).forEach(n=>a.push({k:"n",e,n,date:n.date||"",ts:n.ts||"",txt:n.text||"",by:n.by||"",name:n.taskName||""}));
+ return a.sort(ord)}
+function entLine(x,withMachine,trunc){const u=x.e.unit||"h",by=x.by?` <span class="mut">— ${esc(x.by)}</span>`:"";
+ const tx=trunc&&x.txt.length>trunc?x.txt.slice(0,trunc)+"…":x.txt,m=withMachine?esc(x.e.name)+" · ":"";
+ return x.k=="f"?`✓ ${esc(x.date)} · ${m}<b>${esc(x.name)}</b>${x.hours!=null&&!withMachine?" · "+x.hours+" "+u:""}${tx?" · "+esc(tx):""}${by}`
+  :`📝 ${esc(x.date)} · ${m}${x.name?"<b>"+esc(x.name)+"</b> · ":""}${esc(tx).replace(/\n/g,"<br>")}${by}`}
+function reg(e){const L=entries(e);
+ if(!L.length)return `<p class="mut">Rien d’enregistré. Appuie sur « ✓ Fait » dans un entretien ou ajoute une note.</p>`;
+ const all=ui.reg[e.id];
+ return (all?L:L.slice(0,6)).map(x=>`<div class="hist ent" data-a="ent" data-i="${e.id}" data-j="${x.k=="f"?"f:"+x.t.id+":"+x.i:"n:"+x.n.id}">${entLine(x,false)}</div>`).join("")+(L.length>6?`<button class="g" data-a="reg" data-i="${e.id}" style="margin-top:6px">${all?"Réduire":"Tout voir ("+L.length+")"}</button>`:"")}
+function feedHtml(){const L=S.eq.flatMap(e=>entries(e)).sort(ord).slice(0,5);
+ return `<div class="row" style="justify-content:space-between;margin:16px 0 4px"><h3 style="margin:0">Derniers entretiens et notes</h3><button class="g" data-a="addNote">＋ Note</button></div>`+
+ (L.length?L.map(x=>`<div class="hist ent" data-a="open" data-i="${x.e.id}">${entLine(x,true,70)}</div>`).join(""):`<p class="mut">Rien d’enregistré pour l’instant.</p>`)}
+function askName(){localStorage.setItem(CK,JSON.stringify({...cfg(),asked:true}));
+ form("Quel est ton nom ?",[{k:"n",l:"Ton prénom (écrit avec tes notes et tes entretiens)"}],v=>{if(!v.n.trim())return false;localStorage.setItem(CK,JSON.stringify({...cfg(),name:v.n.trim()}))})}
 function detail(){const e=S.eq.find(x=>x.id==ui.eq);if(!e){ui.eq=null;return ""}
- return `<div class="row" style="justify-content:space-between;margin:6px 0"><button class="g" data-a="back">← Retour</button><button class="g" data-a="editEq" data-i="${e.id}">✎ Modifier</button></div>
+ const L=S.eq.filter(x=>x.cat==e.cat),n=L.findIndex(x=>x.id==e.id)+1;
+ return `<div class="row" style="justify-content:space-between;margin:6px 0"><button class="g" data-a="back">← Retour</button>${L.length>1?`<span class="mut">${n} / ${L.length} · glisse ‹ ›</span>`:""}<button class="g" data-a="editEq" data-i="${e.id}">✎ Modifier</button></div>
  ${e.photo?`<img class="photo" src="${e.photo}" alt="">`:""}<h1>${esc(e.name)}</h1>
  <div class="row"><span class="mut">Compteur : <b>${e.hours} ${e.unit||"h"}</b></span><button class="g" data-a="hours" data-i="${e.id}">Mettre à jour</button></div>
  <h3>Entretiens</h3>
- ${e.tasks.map(t=>{const s=st(e,t),hs=t.hist||[];
-  return `<div class="card" style="display:block;cursor:default"><div class="row" style="justify-content:space-between"><b>${esc(t.name)}</b>${badge(s.l,s.txt)}</div>
-  <div class="mut">${+t.everyDays?"aux "+t.everyDays+" j":""}${+t.everyDays&&+t.everyHours?" / ":""}${+t.everyHours?"aux "+t.everyHours+" "+(e.unit||"h"):""} · fait le ${esc(t.lastDate||"?")}${t.lastHours!=null?" à "+t.lastHours+" "+(e.unit||"h"):""}</div>${t.note?`<div class="hist">ℹ ${esc(t.note)}</div>`:""}
-  <div class="row" style="margin-top:8px"><button class="p" data-a="done" data-i="${e.id}" data-j="${t.id}">✓ Fait</button><button class="g" data-a="editTask" data-i="${e.id}" data-j="${t.id}">✎</button>${hs.length?`<button class="g" data-a="hist" data-j="${t.id}">Historique (${hs.length})</button>`:""}</div>
-  ${ui.hist[t.id]?hs.map(h=>`<div class="hist">${esc(h.date)} · ${h.hours} ${e.unit||"h"}${h.note?" · "+esc(h.note):""}</div>`).join(""):""}</div>`}).join("")||`<p class="mut">Aucun entretien encore.</p>`}
+ ${e.tasks.map(t=>taskRow(e,t)).join("")||`<p class="mut">Aucun entretien encore.</p>`}
  <button class="p big" data-a="addTask" data-i="${e.id}">＋ Ajouter un entretien</button>
- <button class="g big" data-a="ai" data-i="${e.id}">✨ Suggérer des entretiens (IA)</button>`}
+ <button class="g big" data-a="ai" data-i="${e.id}">✨ Suggérer des entretiens (IA)</button>
+ <div class="row" style="justify-content:space-between;margin-top:14px"><h3 style="margin:0">Registre</h3><button class="g" data-a="addNote" data-i="${e.id}">＋ Note</button></div>${reg(e)}`}
 function render(){const a=document.getElementById("app");
  if(ui.eq){a.innerHTML=detail();return}
  const t=ui.tab;
  a.innerHTML=(t=="todo"?todoView():t=="search"?searchView():t=="home"?homeView():catView())+botBar()}
-render();planNotifs();
+render();planNotifs();if(!cfg().name&&!cfg().asked)setTimeout(askName,600);
 </script></body></html>
