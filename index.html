@@ -65,6 +65,7 @@ button{font:inherit}
 .lk{display:flex;gap:8px;align-items:center;justify-content:space-between}.lk a{color:var(--pri);word-break:break-all}
 .toast{position:fixed;left:12px;right:12px;bottom:calc(72px + var(--nav));z-index:6;max-width:616px;margin:0 auto;background:var(--tx);color:var(--bg);border-radius:12px;padding:10px 14px;display:flex;gap:14px;align-items:center;justify-content:space-between}
 .toast button{background:none;border:0;color:inherit;font-weight:700;text-decoration:underline;padding:6px 2px}
+#bar .bb{z-index:4}
 </style></head>
 <body><div id="app"></div>
 <script>
@@ -182,14 +183,22 @@ document.addEventListener("click",ev=>{if(Date.now()-(window._de||0)<500)return;
 const NATIVE=!!(window.Capacitor&&Capacitor.isNativePlatform&&Capacitor.isNativePlatform());
 const CK="cfg-ferme";
 const cfg=()=>{try{return JSON.parse(localStorage.getItem(CK))||{}}catch(e){return{}}};
-async function geminiAsk(prompt){
+const ws=()=>cfg().ws!==false;
+const UK="usage-ferme",AK="cache-ia";
+function usage(){const m=today().slice(0,7);try{const u=JSON.parse(localStorage.getItem(UK))||{};return u.m==m?u:{m,n:0,k:0,c:0}}catch(e){return{m,n:0,k:0,c:0}}}
+function addUse(nq,cached){const u=usage();if(cached)u.c=(u.c||0)+1;else{u.n=(u.n||0)+nq;u.k=(u.k||0)+1}try{localStorage.setItem(UK,JSON.stringify(u))}catch(e){}}
+function aiCache(){try{return JSON.parse(localStorage.getItem(AK))||{}}catch(e){return{}}}
+const cacheGet=k=>aiCache()[k]||null;
+function cachePut(k,v){const c=aiCache();c[k]={...v,t:Date.now()};Object.keys(c).sort((a,b)=>c[b].t-c[a].t).slice(30).forEach(x=>delete c[x]);try{localStorage.setItem(AK,JSON.stringify(c))}catch(e){}}
+async function geminiAsk(prompt,web){
  const c=cfg();if(!c.gk)throw new Error("Ajoute ta clé Gemini dans ⚙ Réglages.");
- const r=await fetch("https://generativelanguage.googleapis.com/v1beta/models/"+encodeURIComponent(c.gm||"gemini-flash-latest")+":generateContent",{method:"POST",headers:{"Content-Type":"application/json","x-goog-api-key":c.gk},body:JSON.stringify({system_instruction:{parts:[{text:SYS}]},contents:[{parts:[{text:prompt}]}],tools:[{google_search:{}}]})});
+ const r=await fetch("https://generativelanguage.googleapis.com/v1beta/models/"+encodeURIComponent(c.gm||"gemini-flash-latest")+":generateContent",{method:"POST",headers:{"Content-Type":"application/json","x-goog-api-key":c.gk},body:JSON.stringify({system_instruction:{parts:[{text:SYS}]},contents:[{parts:[{text:prompt}]}],tools:web===false?undefined:[{google_search:{}}]})});
  const j=await r.json();if(!r.ok)throw new Error((j.error&&j.error.message)||("HTTP "+r.status));
  const cd=(j.candidates||[])[0]||{};
+ const nq=((cd.groundingMetadata||{}).webSearchQueries||[]).length;if(web!==false)addUse(nq);
  const text=((cd.content||{}).parts||[]).map(p=>p.text||"").join("");
  const srcs=(((cd.groundingMetadata||{}).groundingChunks)||[]).map(g=>g.web&&g.web.uri).filter(Boolean).slice(0,3);
- return{text,srcs}}
+ return{text,srcs,q:nq}}
 const LN=()=>window.Capacitor&&Capacitor.Plugins&&Capacitor.Plugins.LocalNotifications;
 async function planNotifs(){
  const ln=LN();if(!ln)return;
@@ -216,6 +225,8 @@ function settings(){
  <label>Ton nom (écrit avec tes notes)<input id="nm" value="${esc(c.name||"")}"></label>
  <label>Clé API Gemini (reste sur ce téléphone)<input id="gk" type="password" value="${esc(c.gk||"")}"></label>
  <label>Modèle Gemini<input id="gm" value="${esc(c.gm||"gemini-flash-latest")}"></label>
+ <label style="display:flex;gap:8px;align-items:flex-start;color:var(--tx)"><input id="ws" type="checkbox" ${c.ws!==false?"checked":""} style="width:auto;margin-top:4px"><span>Autoriser la recherche web de l’IA (peut coûter de l’argent)</span></label>
+ <div class="mut" style="margin:4px 0 10px">${(u=>`Ce mois-ci (sur ce téléphone) : ${u.n||0} recherche(s) Google pour ${u.k||0} demande(s). ${u.c||0} réponse(s) gardée(s) réutilisée(s), sans frais. Selon la page de prix de Google en octobre 2026 : 5 000 recherches gratuites par mois si la facturation est activée, puis environ 0,014 $ chacune, en plus du coût des mots. À revérifier, ça change.`)(usage())}</div>
  <button class="p big" data-save>Enregistrer</button>
  <h3 style="margin-top:18px">Notifications</h3><button class="g big" data-test>Notification test (dans 5 s)</button>
  <h3 style="margin-top:18px">Sauvegarde</h3><button class="g big" data-bk>Copier la sauvegarde complète</button>
@@ -226,7 +237,7 @@ function settings(){
  document.body.appendChild(m);const msg=t=>{m.querySelector("#cm").textContent=t};
  m.onclick=async ev=>{const b=ev.target;
   if(b==m||b.dataset.x!==undefined){m.remove();return}
-  if(b.dataset.save!==undefined){localStorage.setItem(CK,JSON.stringify({...cfg(),gk:m.querySelector("#gk").value.trim(),gm:m.querySelector("#gm").value.trim(),name:m.querySelector("#nm").value.trim(),asked:true}));msg("Enregistré ✓");return}
+  if(b.dataset.save!==undefined){localStorage.setItem(CK,JSON.stringify({...cfg(),gk:m.querySelector("#gk").value.trim(),gm:m.querySelector("#gm").value.trim(),name:m.querySelector("#nm").value.trim(),ws:m.querySelector("#ws").checked,asked:true}));msg("Enregistré ✓");return}
   if(b.dataset.test!==undefined){const ln=LN();if(!ln){msg("Notifications disponibles seulement dans l’app Android.");return}
    try{const p=await ln.requestPermissions();if(p.display!=="granted"){msg("Permission refusée : active les notifications dans les réglages Android.");return}
     await ln.schedule({notifications:[{id:999,title:"Entretien Ferme",body:"Les notifications fonctionnent ✅",schedule:{at:new Date(Date.now()+5000)}}]});msg("Notification dans 5 secondes…")}catch(e){msg("Erreur : "+e.message)}return}
@@ -275,38 +286,36 @@ function menu(){
   if(ui.eq){ui.eq=null;render();return}
   if(ui.tab!=="home"){ui.tab="home";ui.sub="";render();return}
   AP.exitApp()})})();
-(function(){let x0=0,y0=0,t0=0,ok=false;
- document.addEventListener("touchstart",e=>{ok=!(document.querySelector(".mo")||e.target.closest(".chips,input,textarea,select,.bb")||document.querySelector(".drag"));const p=e.touches[0];x0=p.clientX;y0=p.clientY;t0=Date.now()},{passive:true});
- document.addEventListener("touchend",e=>{if(!ok||ui.eq)return;ok=false;const p=e.changedTouches[0],dx=p.clientX-x0,dy=p.clientY-y0;
-  if(Math.abs(dx)<70||Math.abs(dx)<Math.abs(dy)*1.6||Date.now()-t0>700||Date.now()-(window._de||0)<600)return;go(dx<0?1:-1)},{passive:true});
- function go(d){
-  if(ui.eq){const e=S.eq.find(x=>x.id==ui.eq);if(!e)return;const L=S.eq.filter(x=>x.cat==e.cat),n=L[L.findIndex(x=>x.id==e.id)+d];if(n){ui.eq=n.id;render();window.scrollTo(0,0)}return}
-  const cats=S.cats.map(c=>c.id),order=["home","todo","search"],t=ui.tab;
-  if(cats.includes(t)){const n=cats[cats.indexOf(t)+d];if(n){ui.tab=n;ui.sub="";render();window.scrollTo(0,0)}return}
-  const n=order[order.indexOf(t)+d];if(n){ui.tab=n;render();window.scrollTo(0,0)}}})();
 (function(){
  let x0=0,y0=0,t0=0,on=false,lock=0,dx=0,gh={},app=null,W=0,busy=false;
- const nb=d=>{const e=S.eq.find(x=>x.id==ui.eq);if(!e)return null;const L=S.eq.filter(x=>x.cat==e.cat);return L[L.findIndex(x=>x.id==e.id)+d]||null};
- const mk=d=>{const n=nb(d);if(!n)return null;const keep=ui.eq;let h;ui.eq=n.id;try{h=detail()}finally{ui.eq=keep}
+ const nbr=d=>{
+  if(ui.eq){const e=S.eq.find(x=>x.id==ui.eq);if(!e)return null;const L=S.eq.filter(x=>x.cat==e.cat),n=L[L.findIndex(x=>x.id==e.id)+d];return n?{eq:n.id}:null}
+  const cats=S.cats.map(c=>c.id),t=ui.tab;
+  if(cats.includes(t)){const n=cats[cats.indexOf(t)+d];return n?{tab:n}:null}
+  const o=["home","todo","search"],n=o[o.indexOf(t)+d];return n?{tab:n}:null};
+ const mk=d=>{const n=nbr(d);if(!n)return null;const k={eq:ui.eq,tab:ui.tab,sub:ui.sub};let h;
+  try{if(n.eq){ui.eq=n.eq;h=detail()}else{ui.tab=n.tab;ui.sub="";h=bodyHtml()}}finally{ui.eq=k.eq;ui.tab=k.tab;ui.sub=k.sub}
   const g=document.createElement("div");g.className="gh";g.innerHTML="<div>"+h+"</div>";document.body.appendChild(g);hydrate(g);return g};
  const put=(el,x,tr)=>{el.style.transition=tr||"none";el.style.transform="translate3d("+x+"px,0,0)"};
- const clean=()=>{Object.keys(gh).forEach(k=>gh[k]&&gh[k].remove());gh={};app.style.transition="";app.style.transform=""};
+ const clean=()=>{Object.keys(gh).forEach(k=>gh[k]&&gh[k].remove());gh={};if(app){app.style.transition="";app.style.transform=""}};
+ const abort=()=>{on=false;lock=0;dx=0;clean()};
  document.addEventListener("touchstart",e=>{
-  on=!!ui.eq&&!busy&&e.touches.length==1&&!(document.querySelector(".mo")||document.querySelector(".drag")||e.target.closest(".chips,input,textarea,select,.bb"));
+  on=!busy&&e.touches.length==1&&Date.now()-(window._de||0)>600&&!(document.querySelector(".mo")||document.querySelector(".drag")||e.target.closest(".chips,.tabs,input,textarea,select,.bb"));
   lock=0;dx=0;if(!on)return;const p=e.touches[0];x0=p.clientX;y0=p.clientY;t0=Date.now();W=window.innerWidth;app=document.getElementById("app")},{passive:true});
  document.addEventListener("touchmove",e=>{
-  if(!on)return;const p=e.touches[0],ax=p.clientX-x0,ay=p.clientY-y0;
+  if(!on)return;if(document.querySelector(".drag")){abort();return}
+  const p=e.touches[0],ax=p.clientX-x0,ay=p.clientY-y0;
   if(!lock){if(Math.abs(ax)<8&&Math.abs(ay)<8)return;lock=Math.abs(ax)>Math.abs(ay)*1.2?1:-1}
   if(lock!==1)return;
   dx=ax;const d=dx<0?1:-1;if(!(d in gh))gh[d]=mk(d);
   if(gh[d]){put(app,dx);Object.keys(gh).forEach(k=>gh[k]&&put(gh[k],dx+(k==1?W:-W)))}else put(app,dx*0.3)},{passive:true});
  function end(){
   if(!on)return;on=false;if(lock!==1){lock=0;return}lock=0;
-  const d=dx<0?1:-1,g=gh[d],n=nb(d),v=Math.abs(dx)/Math.max(1,Date.now()-t0),T="transform .2s ease-out";
+  const d=dx<0?1:-1,g=gh[d],n=nbr(d),v=Math.abs(dx)/Math.max(1,Date.now()-t0),T="transform .2s ease-out";
   const commit=!!(g&&n&&(Math.abs(dx)>W*0.3||(v>0.5&&Math.abs(dx)>40)));
   busy=true;
   if(commit){put(app,-d*W,T);put(g,0,T)}else{put(app,0,T);Object.keys(gh).forEach(k=>gh[k]&&put(gh[k],k==1?W:-W,T))}
-  setTimeout(()=>{if(commit){ui.eq=n.id;render();window.scrollTo(0,0)}clean();busy=false;dx=0},220)}
+  setTimeout(()=>{if(commit){if(n.eq)ui.eq=n.eq;else{ui.tab=n.tab;ui.sub=""}render();window.scrollTo(0,0)}clean();busy=false;dx=0},220)}
  document.addEventListener("touchend",end);document.addEventListener("touchcancel",end)})();
 const TA='display:block;width:100%;margin-top:3px;padding:10px;font:inherit;border:1px solid var(--bd);border-radius:10px;background:var(--bg);color:var(--tx)';
 function aiPrompt(q,web,nosys){return `${nosys?"":SYS+" "}Tu es un technicien agricole. Machine : ${q}. ${web?"Utilise la recherche web pour trouver le manuel de l’opérateur ou le tableau d’entretien du fabricant. ":""}Propose jusqu’à 8 entretiens préventifs avec leur intervalle. Réponds UNIQUEMENT par un tableau JSON, sans texte autour ni balises. Chaque élément : {"name":"entretien en français","everyDays":nombre ou 0,"everyHours":nombre ou 0,"confidence":"haute|moyenne|faible","source":"${web?"titre du document ET URL précise de la page où l’information a été trouvée":"manuel du fabricant | pratique courante | estimation"}","details":"spécifications utiles trouvées : type et viscosité d’huile, quantité, référence ou numéro de filtre, type de graisse, couple de serrage… (laisse vide si non trouvé, n’invente rien)","variant":"exacte si les données concernent exactement cette variante, sinon proche","variantNote":"si proche : le modèle réellement utilisé"}. Si tu n’es pas sûr d’un intervalle, mets confidence "faible" au lieu d’inventer.`}
@@ -316,7 +325,7 @@ async function aiSuggest(i){
  const m=document.createElement("div");m.className="mo";
  m.innerHTML=`<div class="md"><h3>✨ Suggestions d’entretien (IA)</h3>
  <label>Machine (marque, modèle, année)<input id="aq" value="${esc(e.name)}"></label>
- ${window.claude?'<button class="p big" data-claude>Chercher avec Claude</button>':""}${NATIVE?'<button class="p big" data-gem>Chercher avec Gemini (recherche Google)</button>':""}
+ ${window.claude?'<button class="p big" data-claude>Chercher avec Claude</button>':""}${NATIVE?`<button class="p big" data-gem>${ws()?"Chercher avec Gemini (recherche Google)":"Demander à Gemini (sans recherche web)"}</button><button class="g big" data-regem style="display:none">↻ Refaire une nouvelle recherche</button>`:""}
  <div class="mut" style="margin:12px 0 2px">Ou avec Gemini / une autre IA (copier-coller) :</div>
  <button class="g big" data-copy>1. Copier la question</button>
  <textarea id="apr" rows="3" readonly style="${TA};display:none"></textarea>
@@ -325,7 +334,7 @@ async function aiSuggest(i){
  <div id="ar" class="mut" style="margin:10px 0"></div><div id="ares"></div>
  <div class="bt"><button class="g" data-x>Fermer</button><button class="p" data-add style="display:none">Ajouter la sélection</button></div></div>`;
  document.body.appendChild(m);
- const msg=t=>{m.querySelector("#ar").textContent=t};
+ const msg=t=>{m.querySelector("#ar").textContent=t},msgNow=()=>m.querySelector("#ar").textContent;
  function show(){m.querySelector("#ares").innerHTML=list.map((x,k)=>`<label style="display:flex;gap:8px;align-items:flex-start;color:var(--tx);margin:6px 0"><input type="checkbox" data-k="${k}" checked style="width:auto;margin-top:5px"><span><b>${esc(x.name)}</b><br><span class="mut">${+x.everyHours?"aux "+x.everyHours+" h":""}${+x.everyHours&&+x.everyDays?" / ":""}${+x.everyDays?"aux "+x.everyDays+" j":""} · confiance ${esc(x.confidence)} · ${esc(x.source)}${x.variant=="proche"?" · ⚠ modèle proche":""}</span>${x.details?`<br><span class="hist">${esc(x.details)}</span>`:""}</span></label>`).join("");
   m.querySelector("[data-add]").style.display=list.length?"":"none";const near=[...new Set(list.filter(x=>x.variant=="proche").map(x=>x.variantNote).filter(Boolean))];msg(!list.length?"Aucune suggestion.":(list.some(x=>x.variant=="proche")?"⚠ Variante exacte non trouvée : données du modèle le plus proche"+(near.length?" ("+near.join("; ")+")":"")+". Vérifie avant d’ajouter.":"Décoche ce que tu ne veux pas, puis ajoute."))}
  m.onclick=async ev=>{const b=ev.target,q=m.querySelector("#aq").value;
@@ -340,9 +349,12 @@ async function aiSuggest(i){
    catch(_){msg("Copie la question ci-dessus à la main, puis colle-la dans Gemini.")}return}
   if(b.dataset.parse!==undefined){
    try{list=aiParse(m.querySelector("#ap").value);prov="externe";show()}catch(_){msg("Réponse illisible : colle le tableau JSON complet que l’IA a donné.")}return}
-  if(b.dataset.gem!==undefined){
-   b.disabled=true;msg("Recherche Google en cours… (10 à 30 secondes)");
-   try{const res=await geminiAsk(aiPrompt(q,true,true));list=aiParse(res.text);prov="Gemini";srcs=res.srcs;show()}
+  if(b.dataset.gem!==undefined||b.dataset.regem!==undefined){
+   const web=ws(),ck="s|"+norm(q).replace(/\s+/g," ").trim()+"|"+(web?"w":"n"),hit=b.dataset.regem!==undefined?null:cacheGet(ck),rb=m.querySelector("[data-regem]");
+   if(hit){list=hit.list;prov=hit.prov;srcs=hit.srcs||[];addUse(0,true);show();msg(msgNow()+" · Réponse gardée du "+new Date(hit.t).toLocaleDateString("fr-CA")+" (aucun coût).");if(rb)rb.style.display="";return}
+   b.disabled=true;msg(web?"Recherche Google en cours… (10 à 30 secondes)":"Question à Gemini en cours…");
+   try{const res=await geminiAsk(aiPrompt(q,web,true),web);list=aiParse(res.text);prov=web?"Gemini":"Gemini sans recherche web";srcs=res.srcs;cachePut(ck,{list,prov,srcs});show();
+    msg(web?msgNow()+" · "+res.q+" recherche(s) Google utilisée(s), "+usage().n+" ce mois-ci.":"⚠ Sans recherche web (Réglages) : réponse de mémoire de l’IA, à valider avec le manuel.");if(rb)rb.style.display=""}
    catch(err){msg("Erreur : "+(err&&err.message||"réponse illisible"))}
    b.disabled=false;return}
   if(b.dataset.claude!==undefined){
@@ -428,7 +440,8 @@ async function geminiRaw(parts,o){o=o||{};const c=cfg();if(!c.gk)throw new Error
  const r=await fetch("https://generativelanguage.googleapis.com/v1beta/models/"+encodeURIComponent(c.gm||"gemini-flash-latest")+":generateContent",{method:"POST",headers:{"Content-Type":"application/json","x-goog-api-key":c.gk},body:JSON.stringify(body)});
  const j=await r.json();if(!r.ok)throw new Error((j.error&&j.error.message)||("HTTP "+r.status));
  const cd=(j.candidates||[])[0]||{};
- return{text:((cd.content||{}).parts||[]).map(p=>p.text||"").join(""),chunks:(((cd.groundingMetadata||{}).groundingChunks)||[]).map(g=>g.web).filter(Boolean).map(w=>({uri:w.uri,title:w.title||""}))}}
+ const nq=((cd.groundingMetadata||{}).webSearchQueries||[]).length;if(o.search)addUse(nq);
+ return{q:nq,text:((cd.content||{}).parts||[]).map(p=>p.text||"").join(""),chunks:(((cd.groundingMetadata||{}).groundingChunks)||[]).map(g=>g.web).filter(Boolean).map(w=>({uri:w.uri,title:w.title||""}))}}
 const jobj=t=>JSON.parse(t.slice(t.indexOf("{"),t.lastIndexOf("}")+1));
 const imgPart=d=>({inline_data:{mime_type:"image/jpeg",data:d.split(",")[1]}});
 const okUrl=u=>/^https?:\/\/\S+$/i.test(String(u||"").trim());
@@ -458,7 +471,7 @@ function findDocs(i){const e=S.eq.find(x=>x.id==i),pl=e.plate||{};let list=[],sr
  const m=document.createElement("div");m.className="mo";
  m.innerHTML=`<div class="md"><h3>🔎 Schémas de graissage et manuels</h3>
  <label>Machine (marque, modèle, année)<input id="fq" value="${esc(q0)}"></label>
- <button class="p big" data-go>Chercher avec Gemini (recherche Google)</button>
+ <button class="p big" data-go>Chercher avec Gemini (recherche Google)</button><button class="g big" data-go data-force="1" id="fre" style="display:none">↻ Refaire la recherche (payant)</button>
  <div id="fr" class="mut" style="margin:10px 0"></div><div id="fres"></div>
  <div class="mut" style="margin:12px 0 4px">Ou cherche toi-même :</div>
  <div class="row"><a class="g" id="g1" target="_blank" rel="noopener" style="text-decoration:none;color:var(--tx)">Google</a><a class="g" id="g2" target="_blank" rel="noopener" style="text-decoration:none;color:var(--tx)">Google Images (schémas)</a></div>
@@ -472,14 +485,18 @@ function findDocs(i){const e=S.eq.find(x=>x.id==i),pl=e.plate||{};let list=[],sr
  m.onclick=async ev=>{const b=ev.target;
   if(b==m||b.dataset.x!==undefined){m.remove();return}
   if(b.dataset.keep){const x=(b.dataset.keep[0]=="l"?list:srcs)[+b.dataset.keep.slice(1)];(e.docs=e.docs||[]).push({id:uid(),kind:"link",title:x.title||x.url,url:x.url,type:x.type||"",ts:new Date().toISOString()});save();render();b.textContent="✓ Gardé";b.disabled=true;return}
-  if(b.dataset.go!==undefined){msg("Recherche en cours… (10 à 30 secondes)");b.disabled=true;
-   try{const q=fq.value.trim();
+  if(b.dataset.go!==undefined){
+   if(!ws()){msg("La recherche web est désactivée dans ⚙ Réglages (pour éviter des frais). Utilise les boutons Google ci-dessous, ils sont gratuits.");return}
+   const q=fq.value.trim(),ck="d|"+norm(q).replace(/\s+/g," ").trim(),hit=b.dataset.force?null:cacheGet(ck);
+   if(hit){list=hit.list;srcs=hit.srcs;addUse(0,true);show();msg("Résultats gardés du "+new Date(hit.t).toLocaleDateString("fr-CA")+" (aucun coût).");m.querySelector("#fre").style.display="";return}
+   msg("Recherche en cours… (10 à 30 secondes)");b.disabled=true;
+   try{
     const r=await geminiRaw([{text:`Trouve des liens directs vers le schéma ou tableau de graissage, le manuel d’utilisation ou d’entretien et le catalogue de pièces de : ${q}. Respecte rigoureusement la marque, le modèle et la variante exacte ; si la variante exacte est introuvable, donne le modèle le plus proche avec variant "proche" et explique la différence dans note. N’invente jamais d’URL : n’inclus que des adresses réellement vues dans les résultats de recherche. Réponds uniquement avec un tableau JSON d’objets {"title":"","url":"","type":"graissage ou manuel ou pièces ou autre","variant":"exacte ou proche","note":""}. Si rien n’est trouvé, réponds [].`}],{search:true});
     let arr=[];try{arr=JSON.parse(r.text.slice(r.text.indexOf("["),r.text.lastIndexOf("]")+1))}catch(x){}
     list=(Array.isArray(arr)?arr:[]).filter(x=>x&&okUrl(x.url)).map(x=>({...x,url:String(x.url).trim()})).slice(0,8);
     const seen=new Set(list.map(x=>x.url));
     srcs=r.chunks.filter(c=>okUrl(c.uri)&&!seen.has(c.uri)&&seen.add(c.uri)).slice(0,6).map(c=>({title:c.title,url:c.uri,type:""}));
-    msg(list.length||srcs.length?"":"Rien de précis trouvé. Essaie les boutons Google ci-dessous.");show()}
+    if(list.length||srcs.length)cachePut(ck,{list,srcs});show();msg((list.length||srcs.length?"":"Rien de précis trouvé. Essaie les boutons Google ci-dessous. ")+r.q+" recherche(s) Google utilisée(s), "+usage().n+" ce mois-ci.");m.querySelector("#fre").style.display=""}
    catch(x){msg("Échec : "+x.message)}
    b.disabled=false}};}
 function detail(){const e=S.eq.find(x=>x.id==ui.eq);if(!e){ui.eq=null;return ""}
@@ -494,9 +511,10 @@ function detail(){const e=S.eq.find(x=>x.id==ui.eq);if(!e){ui.eq=null;return ""}
  <button class="g big" data-a="ai" data-i="${e.id}">✨ Suggérer des entretiens (IA)</button>
  ${docsHtml(e)}
  <div class="row" style="justify-content:space-between;margin-top:14px"><h3 style="margin:0">Registre</h3><button class="g" data-a="addNote" data-i="${e.id}">＋ Note</button></div>${reg(e)}`}
-function render(){const a=document.getElementById("app");a.classList.toggle("pg",!!ui.eq);
- if(ui.eq){a.innerHTML=detail();hydrate(a);return}
- const t=ui.tab;
- a.innerHTML=(t=="todo"?todoView():t=="search"?searchView():t=="home"?homeView():catView())+botBar()}
+function bodyHtml(){const t=ui.tab;return t=="todo"?todoView():t=="search"?searchView():t=="home"?homeView():catView()}
+function render(){const a=document.getElementById("app");a.classList.add("pg");
+ let bar=document.getElementById("bar");if(!bar){bar=document.createElement("div");bar.id="bar";document.body.appendChild(bar)}
+ if(ui.eq){a.innerHTML=detail();hydrate(a);bar.innerHTML="";return}
+ a.innerHTML=bodyHtml();bar.innerHTML=botBar()}
 render();planNotifs();if(!cfg().name&&!cfg().asked)setTimeout(askName,600);
 </script></body></html>
